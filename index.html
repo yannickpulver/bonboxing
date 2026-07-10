@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>bonboxing</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥊</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;800;900&family=DM+Sans:ital,wght@0,400;0,500;0,700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #fbfbfd; }
+  body { font-family: "Geist", system-ui, sans-serif; color: #0b0b0f; user-select: none; }
+  canvas { display: block; cursor: crosshair; }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .card {
+    position: absolute; background: #fff;
+    border: 1px solid #e9eaf1; border-radius: 14px;
+    box-shadow: 0 4px 18px rgba(20, 20, 40, .07);
+    padding: 12px 18px;
+  }
+  #scoreCard { top: 20px; left: 20px; min-width: 210px; }
+  #scoreCard .label {
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+    color: #54545e; text-transform: uppercase;
+  }
+  #score { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-top: 2px; }
+  #combo {
+    font-size: 13px; font-weight: 800; margin-top: 2px;
+    background: linear-gradient(110deg, #24c7ff, #0b6fb8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    opacity: 0; transition: opacity .15s;
+  }
+  #power {
+    font-size: 13px; font-weight: 800; margin-top: 2px; display: none;
+  }
+  #power.laser { display: block; color: #e11d1d; }
+  #power.gold { display: block; color: #b8860b; }
+  #hpCard { top: 20px; right: 20px; font-size: 22px; letter-spacing: 3px; padding: 14px 18px; }
+  #vignette {
+    position: absolute; inset: 0; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(224, 49, 25, .4) 100%);
+    transition: opacity .1s;
+  }
+  .pop {
+    position: absolute; font-weight: 900; color: #0b0b0f;
+    animation: popfly .7s ease-out forwards;
+    transform: translate(-50%, -50%);
+  }
+  .pop.amount {
+    background: linear-gradient(110deg, #24c7ff, #0b6fb8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  @keyframes popfly {
+    0%   { opacity: 1; transform: translate(-50%, -50%) scale(.6) rotate(-6deg); }
+    30%  { transform: translate(-50%, -70%) scale(1.25) rotate(3deg); }
+    100% { opacity: 0; transform: translate(-50%, -160%) scale(1) rotate(-2deg); }
+  }
+
+  .screen {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px;
+    background: rgba(251, 251, 253, .78); text-align: center;
+    backdrop-filter: blur(6px); cursor: pointer;
+  }
+  .screen h1 {
+    font-size: clamp(48px, 9vw, 96px); font-weight: 800; letter-spacing: -0.04em;
+    color: #0b0b0f;
+  }
+  .screen h1 .grad {
+    background: linear-gradient(110deg, #24c7ff, #0b6fb8);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .screen p {
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 18px; color: #54545e; max-width: 460px; line-height: 1.55;
+  }
+  .screen .cta {
+    margin-top: 12px; padding: 15px 36px; border-radius: 12px;
+    background: #0b0b0f; color: #fff; font-weight: 600; font-size: 17px;
+    box-shadow: 0 6px 20px rgba(11, 11, 15, .25);
+    transition: transform .12s;
+  }
+  .screen:hover .cta { transform: scale(1.04); }
+  .cta.disabled { opacity: .35; transform: none !important; transition: opacity .3s; }
+  .screen .keys {
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 13px; color: #9a9aa6;
+  }
+  .hidden { display: none !important; }
+  #finalScore { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  #bestScore { font-size: 15px !important; }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="scoreCard" class="card">
+    <div class="label">Expenses declined</div>
+    <div id="score">CHF 0.00</div>
+    <div id="combo"></div>
+    <div id="power"></div>
+  </div>
+  <div id="hpCard" class="card"><span id="hp"></span></div>
+  <div id="vignette"></div>
+</div>
+
+<div id="startScreen" class="screen">
+  <h1>bon<span class="grad">boxing</span></h1>
+  <p>The whole town is after you — shops, factories, die Post and the Steueramt, all firing receipts at your face. Scan them the hard way. 🥊</p>
+  <div class="cta">Start boxing</div>
+  <div class="keys">Left click — left jab · Right click — right cross · Mouse — aim · A/D or ←/→ — sidestep · M — mute</div>
+  <div class="keys">Punch the floating cards for power-ups. Beware the Steuerrechnung.</div>
+</div>
+
+<div id="gameOverScreen" class="screen hidden">
+  <h1>buried in <span class="grad">paperwork</span></h1>
+  <div id="finalScore"></div>
+  <p id="bestScore"></p>
+  <div class="cta">Rematch</div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- Renderer / Scene / Camera ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xfbfbfd);
+scene.fog = new THREE.Fog(0xfbfbfd, 22, 60);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 100);
+const CAM_POS = new THREE.Vector3(0, 1.6, 6);
+camera.position.copy(CAM_POS);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- Lights ----------
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8dae4, 0.85));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+keyLight.position.set(4, 8, 6);
+scene.add(keyLight);
+
+// ---------- Environment ----------
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(120, 120),
+  new THREE.MeshStandardMaterial({ color: 0xf1f2f7, roughness: 0.95 })
+);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(120, 60, 0xdfe2ec, 0xe9ebf3);
+grid.position.y = 0.01;
+scene.add(grid);
+
+// ---------- The town that prints receipts ----------
+const city = new THREE.Group();
+scene.add(city);
+const SPAWNS = { bon: [], qr: [], tax: [] };
+const smokeEmitters = [];
+
+function buildingFace(wPx, hPx, base, label, labelColor, redEyes) {
+  const c = document.createElement('canvas');
+  c.width = wPx; c.height = hPx;
+  const g = c.getContext('2d');
+  g.fillStyle = base;
+  g.fillRect(0, 0, wPx, hPx);
+  // windows
+  const top = label ? 46 : 18;
+  for (let y = top; y < hPx - 24; y += 30) {
+    for (let x = 14; x < wPx - 26; x += 26) {
+      g.fillStyle = Math.random() < 0.18 ? '#ffd98a' : 'rgba(45,52,70,.7)';
+      g.fillRect(x, y, 14, 18);
+    }
+  }
+  if (redEyes) {
+    g.fillStyle = '#e11d1d';
+    g.fillRect(wPx / 2 - 34, 46, 20, 24);
+    g.fillRect(wPx / 2 + 14, 46, 20, 24);
+  }
+  if (label) {
+    g.fillStyle = labelColor;
+    g.font = 'bold 24px monospace';
+    g.textAlign = 'center';
+    g.fillText(label, wPx / 2, 30);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function addBuilding({ x, z = -24, w, h, d = 2.5, color, label, labelColor = '#0b0b0f', chimneys = 0, spawns, redEyes = false, plain = false }) {
+  const base = new THREE.Color(color);
+  const sideMat = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.86), roughness: 0.9 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: base.clone().multiplyScalar(0.6), roughness: 0.9 });
+  const frontMat = plain
+    ? new THREE.MeshStandardMaterial({ color: base, roughness: 0.9 })
+    : new THREE.MeshStandardMaterial({ map: buildingFace(Math.round(w * 48), Math.round(h * 48), '#' + base.getHexString(), label, labelColor, redEyes), roughness: 0.9 });
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    [sideMat, sideMat, roofMat, roofMat, frontMat, sideMat]
+  );
+  box.position.set(x, h / 2, z);
+  city.add(box);
+
+  for (let i = 0; i < chimneys; i++) {
+    const ch = 0.5 + Math.random() * 0.5;
+    const chimney = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.14, 0.18, ch, 10),
+      new THREE.MeshStandardMaterial({ color: 0x5a5e6b, roughness: 0.9 })
+    );
+    const cx = x + (Math.random() - 0.5) * (w - 0.8);
+    chimney.position.set(cx, h + ch / 2, z + (Math.random() - 0.5) * (d - 0.8));
+    city.add(chimney);
+    smokeEmitters.push({ pos: new THREE.Vector3(cx, h + ch, chimney.position.z), next: Math.random() });
+  }
+  if (spawns) SPAWNS[spawns].push(new THREE.Vector3(x, h * 0.65, z + d / 2 + 0.3));
+}
+
+// front row: shops, factories and the dreaded Steueramt
+addBuilding({ x: -13,  w: 5,   h: 3.4, d: 3, color: 0xa8968d, label: 'FABRIK',        labelColor: '#3a3a40', chimneys: 2, spawns: 'bon' });
+addBuilding({ x: -8.5, w: 3.2, h: 2.6, color: 0xe8e4da, label: 'MIGROS',        labelColor: '#f26d1e', spawns: 'bon' });
+addBuilding({ x: -5.4, w: 2.6, h: 2.2, color: 0xdfe0e6, label: 'COOP',          labelColor: '#e0451f', spawns: 'bon' });
+addBuilding({ x: -2.7, w: 2.4, h: 4.4, color: 0xc3c9d8, label: 'BANK',          labelColor: '#1a4f8f', spawns: 'qr' });
+addBuilding({ x: 0.9,  w: 4,   h: 7,   color: 0xb7bac6, label: 'STEUERAMT',     labelColor: '#7f1010', chimneys: 1, spawns: 'tax', redEyes: true });
+addBuilding({ x: 4.5,  w: 2.6, h: 2.4, color: 0xf3e9c8, label: 'DIE POST',      labelColor: '#f8b800', spawns: 'qr' });
+addBuilding({ x: 7,    w: 2.2, h: 2,   color: 0xe6e2dc, label: 'DENNER',        labelColor: '#c8102e', spawns: 'bon' });
+addBuilding({ x: 10.6, w: 5,   h: 3,   d: 3, color: 0x8f939f, label: 'FABRIK',  labelColor: '#2e2e34', chimneys: 3, spawns: 'bon' });
+addBuilding({ x: 14.2, w: 1.8, h: 1.6, color: 0xe9ddc9, label: 'KIOSK',         labelColor: '#0b0b0f', spawns: 'bon' });
+
+// back row: hazy silhouettes for depth
+for (let i = 0; i < 9; i++) {
+  addBuilding({
+    x: -18 + i * 4.4 + (Math.random() - 0.5) * 1.5,
+    z: -30 - Math.random() * 3,
+    w: 2.5 + Math.random() * 3,
+    h: 4 + Math.random() * 5,
+    color: 0xc7cad6,
+    plain: true,
+    chimneys: Math.random() < 0.4 ? 1 : 0,
+  });
+}
+
+// Swiss flag on the Steueramt roof
+{
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8),
+    new THREE.MeshStandardMaterial({ color: 0x8b8f9c })
+  );
+  pole.position.set(0.9, 7.55, -24);
+  city.add(pole);
+  const fc = document.createElement('canvas');
+  fc.width = fc.height = 64;
+  const fg = fc.getContext('2d');
+  fg.fillStyle = '#da291c'; fg.fillRect(0, 0, 64, 64);
+  fg.fillStyle = '#fff';
+  fg.fillRect(26, 12, 12, 40); fg.fillRect(12, 26, 40, 12);
+  const flagTex = new THREE.CanvasTexture(fc);
+  flagTex.colorSpace = THREE.SRGBColorSpace;
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.55, 0.55),
+    new THREE.MeshBasicMaterial({ map: flagTex, side: THREE.DoubleSide })
+  );
+  flag.position.set(1.2, 7.8, -24);
+  city.add(flag);
+}
+
+// ---------- Chimney smoke ----------
+const smokeTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(32, 32, 4, 32, 32, 30);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const puffs = [];
+
+function updateSmoke(dt) {
+  for (const e of smokeEmitters) {
+    e.next -= dt;
+    if (e.next <= 0) {
+      e.next = 0.5 + Math.random() * 0.9;
+      const m = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: smokeTex, color: 0xb9bdc9, transparent: true, opacity: 0.35, depthWrite: false,
+      }));
+      m.position.copy(e.pos);
+      m.scale.setScalar(0.35);
+      scene.add(m);
+      puffs.push({ m, life: 0, max: 2.5 + Math.random() * 1.5, drift: 0.15 + Math.random() * 0.25 });
+    }
+  }
+  for (let i = puffs.length - 1; i >= 0; i--) {
+    const p = puffs[i];
+    p.life += dt;
+    const k = p.life / p.max;
+    p.m.position.y += dt * 0.7;
+    p.m.position.x += dt * p.drift;
+    p.m.scale.setScalar(0.35 + k * 1.7);
+    p.m.material.opacity = 0.35 * (1 - k);
+    if (k >= 1) {
+      scene.remove(p.m);
+      p.m.material.dispose();
+      puffs.splice(i, 1);
+    }
+  }
+}
+
+// ---------- Paper textures (Swiss edition) ----------
+function paperCanvas(w, h, jagged = true, tint) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = tint || (jagged ? '#fffdf6' : '#fdfdfb');
+  if (jagged) {
+    g.fillRect(0, 0, w, h - 16);
+    // torn bottom edge
+    g.beginPath();
+    g.moveTo(0, h - 16);
+    for (let x = 0; x <= w; x += 16) g.lineTo(x + 8, x % 32 ? h : h - 16);
+    g.lineTo(w, h - 16); g.closePath(); g.fill();
+  } else {
+    g.fillRect(0, 0, w, h);
+  }
+  // subtle edge so it reads on the light background
+  g.strokeStyle = jagged ? '#e2ddcf' : '#e4e4e8';
+  g.lineWidth = 3;
+  g.strokeRect(1, 1, w - 2, jagged ? h - 18 : h - 2);
+  return [c, g];
+}
+
+function toTexture(c) {
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// bent paper geometry sized from the canvas (px * scale = world units)
+function makePaperGeo(wPx, hPx, scale, bend = 0.06) {
+  const w = wPx * scale, h = hPx * scale;
+  const geo = new THREE.PlaneGeometry(w, h, 1, 8);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setZ(i, Math.sin(pos.getY(i) * 3) * bend * (h / 1.3));
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const SHOPS = ['MIGROS', 'COOP', 'SBB CFF FFS', 'BAKERY BAKERY', 'MAIMIN NOODLES', 'GRÜTSCHALP BAHN', 'MARZILIBAD', 'GURTENBAHN', 'TRAMDEPOT', 'ADRIANOS'];
+const ITEMS = ['RIVELLA BLAU', 'CERVELAT', 'GIPFELI', 'RACLETTEKAESE', 'ZWEIFEL CHIPS', 'OVOMALTINE', 'BIRCHERMUESLI', 'FONDUE MIX', 'TOBLERONE', 'AROMAT', 'KAFFEE CREME', 'ZUGBILLETT ZH', 'ALPKAESE', 'BUENDNERFLEISCH', 'MANDELBAERLI', 'AARE BOEOETLI', 'YB TICKET', 'RUGENBRAEU', 'MERINGUE'];
+const SLOGANS = ['MERCI VIELMAL!', 'UF WIEDERLUEGE', 'TWINT AKZEPTIERT', 'BHALTED SIE DR BON', 'GRUESS US BAERN'];
+
+function makeBon() {
+  const n = 2 + ((Math.random() * 7) | 0); // 2-8 items: short and long Bons
+  const W = [224, 256, 280][(Math.random() * 3) | 0];
+  const h = 168 + n * 30 + 196;
+  const tint = ['#fffdf6', '#fdfaef', '#fcfcfa'][(Math.random() * 3) | 0];
+  const [c, g] = paperCanvas(W, h, true, tint);
+  const cx = W / 2;
+  const dashes = ct => '-'.repeat(ct);
+  g.fillStyle = '#222';
+  g.textAlign = 'center';
+  const shop = SHOPS[(Math.random() * SHOPS.length) | 0];
+  const deco = ['* {} *', '{}', '~ {} ~'][(Math.random() * 3) | 0].replace('{}', shop);
+  g.font = `bold ${deco.length > 13 ? 20 : 26}px monospace`;
+  g.fillText(deco, cx, 46);
+  g.font = '15px monospace';
+  g.fillText('3000 BERN  MWST 8.1%', cx, 74);
+  g.font = '13px monospace';
+  g.fillText(`10.07.2026  ${9 + ((Math.random() * 12) | 0)}:${String((Math.random() * 60) | 0).padStart(2, '0')}  KASSE ${1 + ((Math.random() * 4) | 0)}`, cx, 96);
+  g.font = '15px monospace';
+  g.fillText(dashes((W - 40) / 9 | 0), cx, 120);
+  let y = 148, total = 0;
+  const maxChars = W === 224 ? 10 : 13;
+  for (let i = 0; i < n; i++) {
+    const price = Math.random() * 25 + 1;
+    total += price;
+    g.font = '15px monospace';
+    g.textAlign = 'left';
+    g.fillText(ITEMS[(Math.random() * ITEMS.length) | 0].slice(0, maxChars), 20, y);
+    g.textAlign = 'right';
+    g.fillText(price.toFixed(2), W - 20, y);
+    y += 30;
+  }
+  g.textAlign = 'center';
+  g.fillText(dashes((W - 40) / 9 | 0), cx, y + 4);
+  y += 34;
+  total = Math.round(total * 20) / 20; // Swiss 5-cent rounding
+  const totalText = 'TOTAL CHF ' + total.toFixed(2);
+  if (Math.random() < 0.5) {
+    g.fillRect(14, y - 20, W - 28, 30);
+    g.fillStyle = tint;
+    g.font = 'bold 18px monospace';
+    g.fillText(totalText, cx, y + 2);
+    g.fillStyle = '#222';
+  } else {
+    g.textAlign = 'left';
+    g.font = 'bold 19px monospace';
+    g.fillText(totalText, 20, y);
+  }
+  y += 36;
+  g.textAlign = 'center';
+  g.font = 'bold 14px monospace';
+  g.fillText(SLOGANS[(Math.random() * SLOGANS.length) | 0], cx, y);
+  for (let x = 36; x < W - 36; x += 3 + Math.random() * 5) {
+    g.fillRect(x, y + 22, 1 + Math.random() * 3, 56);
+  }
+  return { tex: toTexture(c), total, geo: makePaperGeo(W, h, 0.0026) };
+}
+
+function drawSwissQR(g, x, y, size) {
+  const cells = 25, s = size / cells;
+  g.fillStyle = '#000';
+  for (let i = 0; i < cells; i++)
+    for (let j = 0; j < cells; j++)
+      if (Math.random() < 0.45) g.fillRect(x + i * s, y + j * s, s, s);
+  // finder patterns
+  for (const [fx, fy] of [[0, 0], [cells - 7, 0], [0, cells - 7]]) {
+    g.fillStyle = '#000'; g.fillRect(x + fx * s, y + fy * s, 7 * s, 7 * s);
+    g.fillStyle = '#fff'; g.fillRect(x + (fx + 1) * s, y + (fy + 1) * s, 5 * s, 5 * s);
+    g.fillStyle = '#000'; g.fillRect(x + (fx + 2) * s, y + (fy + 2) * s, 3 * s, 3 * s);
+  }
+  // Swiss cross in the middle
+  const cx = x + size / 2, cy = y + size / 2, b = s * 5;
+  g.fillStyle = '#000';
+  g.fillRect(cx - b / 2, cy - b / 2, b, b);
+  g.fillStyle = '#fff';
+  g.fillRect(cx - b * 0.1, cy - b * 0.32, b * 0.2, b * 0.64);
+  g.fillRect(cx - b * 0.32, cy - b * 0.1, b * 0.64, b * 0.2);
+}
+
+function makeQrBill() {
+  // Swiss QR-bill payment part: 210x105mm, Empfangsschein left, Zahlteil right
+  const W = 840, H = 420;
+  const [c, g] = paperCanvas(W, H, false, '#ffffff');
+  const total = Math.round((Math.random() * 320 + 80) * 20) / 20;
+  const amount = total.toFixed(2);
+  const iban = 'CH' + (10 + ((Math.random() * 90) | 0)) + ' 3000 0529 8331 190' + ((Math.random() * 10) | 0);
+  const ref = '21 00000 00003 13947 14300 0' + (1000 + ((Math.random() * 9000) | 0));
+  const creditor = ['Evil Print AG', 'Inkasso Alpenblick GmbH', 'Papierflut AG'][(Math.random() * 3) | 0];
+
+  // perforation line with scissors
+  g.strokeStyle = '#333';
+  g.setLineDash([7, 5]);
+  g.beginPath(); g.moveTo(0, 8); g.lineTo(W, 8); g.stroke();
+  g.beginPath(); g.moveTo(252, 8); g.lineTo(252, H); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = '#333';
+  g.font = '20px sans-serif';
+  g.fillText('✂', 36, 18);
+  g.save();
+  g.translate(252, 60); g.rotate(Math.PI / 2);
+  g.fillText('✂', 0, 6);
+  g.restore();
+
+  const head = (txt, x, y) => { g.font = 'bold 13px sans-serif'; g.fillText(txt, x, y); };
+  const val = (txt, x, y) => { g.font = '14px sans-serif'; g.fillText(txt, x, y); };
+  g.fillStyle = '#000';
+  g.textAlign = 'left';
+
+  // --- Empfangsschein (receipt stub, left) ---
+  g.font = 'bold 19px sans-serif';
+  g.fillText('Empfangsschein', 24, 46);
+  head('Konto / Zahlbar an', 24, 78);
+  val(iban, 24, 96);
+  val(creditor, 24, 114);
+  val('3000 Bern', 24, 132);
+  head('Referenz', 24, 162);
+  val(ref.slice(0, 20), 24, 180);
+  val(ref.slice(20), 24, 198);
+  head('Zahlbar durch', 24, 228);
+  val('Freelancer/in', 24, 246);
+  val('3000 Bern', 24, 264);
+  head('Währung', 24, 316);
+  head('Betrag', 100, 316);
+  val('CHF', 24, 336);
+  val(amount, 100, 336);
+  head('Annahmestelle', 130, 390);
+
+  // --- Zahlteil (payment part, right) ---
+  g.font = 'bold 19px sans-serif';
+  g.fillText('Zahlteil', 278, 46);
+  drawSwissQR(g, 278, 66, 210);
+  head('Währung', 278, 316);
+  head('Betrag', 354, 316);
+  val('CHF', 278, 336);
+  val(amount, 354, 336);
+  head('Konto / Zahlbar an', 520, 46);
+  val(iban, 520, 64);
+  val(creditor, 520, 82);
+  val('3000 Bern', 520, 100);
+  head('Referenz', 520, 130);
+  val(ref.slice(0, 20), 520, 148);
+  val(ref.slice(20), 520, 166);
+  head('Zusätzliche Informationen', 520, 196);
+  val('Rechnung Nr. ' + (30000 + ((Math.random() * 9999) | 0)), 520, 214);
+  head('Zahlbar durch', 520, 244);
+  val('Freelancer/in', 520, 262);
+  val('3000 Bern', 520, 280);
+
+  return { tex: toTexture(c), total, geo: makePaperGeo(W, H, 0.0024, 0.015) };
+}
+
+function makeTaxBill() {
+  // stiff A4 letter, no torn edge
+  const [c, g] = paperCanvas(420, 594, false);
+  const total = Math.round((Math.random() * 3000 + 1000) * 20) / 20;
+  // sender + date header
+  g.fillStyle = '#222';
+  g.textAlign = 'left';
+  g.font = '13px monospace';
+  g.fillText('Steuerverwaltung des Kantons Bern', 36, 44);
+  g.fillText('Postfach, 3001 Bern', 36, 62);
+  g.textAlign = 'right';
+  g.fillText('01.07.2026', 384, 44);
+  // addressee
+  g.textAlign = 'left';
+  g.fillText('Freelancer/in', 36, 110);
+  g.fillText('3000 Bern', 36, 128);
+  // title
+  g.font = 'bold 28px monospace';
+  g.fillText('STEUERRECHNUNG 2026', 36, 180);
+  g.fillRect(36, 192, 348, 2);
+  // angry face
+  g.strokeStyle = '#b91c1c';
+  g.lineWidth = 8;
+  g.beginPath(); g.moveTo(150, 225); g.lineTo(200, 250); g.stroke();   // left brow
+  g.beginPath(); g.moveTo(290, 225); g.lineTo(240, 250); g.stroke();   // right brow
+  g.fillStyle = '#b91c1c';
+  g.beginPath(); g.arc(180, 275, 13, 0, 7); g.fill();
+  g.beginPath(); g.arc(260, 275, 13, 0, 7); g.fill();
+  g.beginPath();                                                        // zigzag mouth
+  g.moveTo(165, 325);
+  for (let i = 0; i < 6; i++) g.lineTo(175 + i * 18, i % 2 ? 325 : 313);
+  g.lineWidth = 6; g.stroke();
+  // positions table
+  g.fillStyle = '#222';
+  g.font = '15px monospace';
+  const lines = [['Einkommenssteuer', total * 0.55], ['Vermoegenssteuer', total * 0.2], ['Gemeindesteuer', total * 0.25]];
+  let y = 385;
+  for (const [label, amt] of lines) {
+    g.textAlign = 'left';
+    g.fillText(label, 36, y);
+    g.textAlign = 'right';
+    g.fillText(amt.toFixed(2), 384, y);
+    y += 26;
+  }
+  g.fillRect(36, y - 12, 348, 2);
+  g.font = 'bold 22px monospace';
+  g.fillStyle = '#b91c1c';
+  g.textAlign = 'left';
+  g.fillText('TOTAL', 36, y + 22);
+  g.textAlign = 'right';
+  g.fillText('CHF ' + total.toLocaleString('de-CH', { minimumFractionDigits: 2 }), 384, y + 22);
+  g.font = '13px monospace';
+  g.fillStyle = '#222';
+  g.textAlign = 'left';
+  g.fillText('Zahlbar innert 30 Tagen.', 36, y + 52);
+  // MAHNUNG stamp
+  g.save();
+  g.translate(210, 545); g.rotate(-0.1);
+  g.strokeStyle = '#b91c1c'; g.lineWidth = 4;
+  g.fillStyle = '#b91c1c';
+  g.strokeRect(-115, -24, 230, 42);
+  g.font = 'bold 28px monospace';
+  g.textAlign = 'center';
+  g.fillText('MAHNUNG', 0, 8);
+  g.restore();
+  return { tex: toTexture(c), total, geo: makePaperGeo(420, 594, 0.0042, 0.015) };
+}
+
+const VARIANTS = {
+  bon: Array.from({ length: 14 }, makeBon),
+  qr: Array.from({ length: 4 }, makeQrBill),
+  tax: Array.from({ length: 2 }, makeTaxBill),
+};
+
+const TYPES = {
+  bon: { hp: 1, radius: 1.5,  speedMul: 1,    flutter: 1 },
+  qr:  { hp: 2, radius: 1.65, speedMul: 0.75, flutter: 0.7 },
+  tax: { hp: 3, radius: 2,    speedMul: 0.5,  flutter: 0.3 },
+};
+
+// ---------- Boxing gloves (bonbox orange) ----------
+const GLOVE_ORANGE = 0xe87200, GLOVE_GOLD = 0xffc21a;
+
+function makeGlove() {
+  const glove = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: GLOVE_ORANGE, roughness: 0.5 });
+  glove.userData.mat = mat;
+  const fist = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 24), mat);
+  fist.scale.set(1, 0.88, 1.1);
+  glove.add(fist);
+  const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), mat);
+  thumb.position.set(0.2, -0.05, 0.1);
+  glove.add(thumb);
+  const cuff = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.16, 0.19, 0.3, 20),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })
+  );
+  cuff.rotation.x = Math.PI / 2;
+  cuff.position.set(0, -0.04, 0.32);
+  glove.add(cuff);
+  return glove;
+}
+
+const gloves = [];
+for (const side of [-1, 1]) {
+  const mesh = makeGlove();
+  if (side === 1) mesh.children[1].position.x *= -1; // mirror thumb
+  const rest = new THREE.Vector3(side * 0.55, -0.5, -1.15);
+  mesh.position.copy(rest);
+  camera.add(mesh);
+  gloves.push({ mesh, rest, side, t: 1, active: false, target: rest.clone() });
+}
+scene.add(camera);
+
+// handheld receipt-scanner: replaces the right glove while the laser runs
+const laserGun = new THREE.Group();
+{
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.16, 0.15, 0.42),
+    new THREE.MeshStandardMaterial({ color: 0x2a2c34, roughness: 0.5 })
+  );
+  laserGun.add(body);
+  const grip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.22, 0.14),
+    new THREE.MeshStandardMaterial({ color: 0x3a3d49, roughness: 0.6 })
+  );
+  grip.position.set(0, -0.16, -0.12);
+  grip.rotation.x = -0.3;
+  laserGun.add(grip);
+  const tip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.06, 0.08, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff2222 })
+  );
+  tip.rotation.x = Math.PI / 2;
+  tip.position.set(0, 0.02, 0.26);
+  laserGun.add(tip);
+  laserGun.userData.tip = tip;
+  laserGun.position.set(0.55, -0.45, -1.15);
+  laserGun.visible = false;
+  camera.add(laserGun);
+}
+
+// ---------- Audio (synthesized, no assets) ----------
+let audio = null;
+function initAudio() {
+  if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playSound(type) {
+  if (!audio) return;
+  const t = audio.currentTime;
+  const gain = audio.createGain();
+  gain.connect(audio.destination);
+  if (type === 'punch') {
+    const o = audio.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    gain.gain.setValueAtTime(0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    o.connect(gain); o.start(t); o.stop(t + 0.15);
+  } else if (type === 'hit') {
+    const len = audio.sampleRate * 0.12;
+    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    const f = audio.createBiquadFilter();
+    f.type = 'bandpass'; f.frequency.value = 2400; f.Q.value = 0.8;
+    gain.gain.setValueAtTime(0.55, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    src.connect(f); f.connect(gain); src.start(t);
+  } else if (type === 'monster') {
+    const o = audio.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(75, t);
+    o.frequency.linearRampToValueAtTime(48, t + 0.5);
+    const trem = audio.createOscillator();
+    const tremGain = audio.createGain();
+    trem.frequency.value = 11; tremGain.gain.value = 0.12;
+    trem.connect(tremGain); tremGain.connect(gain.gain);
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    o.connect(gain); o.start(t); o.stop(t + 0.55);
+    trem.start(t); trem.stop(t + 0.55);
+  } else if (type === 'power') {
+    [523, 659, 784].forEach((f, i) => {
+      const o = audio.createOscillator();
+      const og = audio.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      og.gain.setValueAtTime(0.001, t + i * 0.07);
+      og.gain.exponentialRampToValueAtTime(0.25, t + i * 0.07 + 0.02);
+      og.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.25);
+      o.connect(og); og.connect(audio.destination);
+      o.start(t + i * 0.07); o.stop(t + i * 0.07 + 0.3);
+    });
+  } else if (type === 'hurt') {
+    const o = audio.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(110, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.3);
+    gain.gain.setValueAtTime(0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+    o.connect(gain); o.start(t); o.stop(t + 0.33);
+  }
+}
+
+// ---------- 16-bit soundtrack ----------
+const N = n => 440 * Math.pow(2, (n - 69) / 12); // midi → Hz
+const SONG = {
+  bassRoots: [45, 41, 48, 43],   // Am F C G
+  chordRoots: [57, 53, 60, 55],
+  lead: [
+    69,0,72,0, 76,0,72,0, 74,0,72,0, 69,0,67,0,
+    72,0,69,0, 65,0,69,0, 72,0,74,0, 76,0,72,0,
+    76,0,79,0, 76,0,72,0, 74,0,76,0, 72,0,71,0,
+    71,0,67,0, 71,0,74,0, 76,0,74,0, 71,0,67,0,
+  ],
+  kick:  [1,0,0,0, 0,0,0,0, 1,0,1,0, 0,0,0,0],
+  snare: [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1],
+  hat:   [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1],
+  arp: [0, 7, 12, 7],
+};
+const STEP_DUR = 60 / 138 / 4; // 138 BPM, 16th notes
+const music = { playing: false, muted: false, step: 0, nextTime: 0, gain: null, timer: null };
+
+function musicVoice(freq, t, dur, vol, type) {
+  const o = audio.createOscillator();
+  const g = audio.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(music.gain);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function musicNoise(t, dur, vol, freq, filterType) {
+  const len = Math.max(64, audio.sampleRate * dur);
+  const buf = audio.createBuffer(1, len, audio.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = audio.createBufferSource();
+  src.buffer = buf;
+  const f = audio.createBiquadFilter();
+  f.type = filterType; f.frequency.value = freq;
+  const g = audio.createGain();
+  g.gain.value = vol;
+  src.connect(f); f.connect(g); g.connect(music.gain);
+  src.start(t);
+}
+
+function scheduleStep(step, t) {
+  const bar = (step >> 4) % 4;
+  const s16 = step % 16;
+  if (SONG.kick[s16]) {
+    const o = audio.createOscillator();
+    const g = audio.createGain();
+    o.frequency.setValueAtTime(130, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.09);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(g); g.connect(music.gain);
+    o.start(t); o.stop(t + 0.11);
+  }
+  if (SONG.snare[s16]) musicNoise(t, 0.09, 0.35, 1800, 'bandpass');
+  if (SONG.hat[s16]) musicNoise(t, 0.03, 0.12, 8000, 'highpass');
+
+  const root = SONG.bassRoots[bar];
+  const bassPat = [root,0,root,0, root+12,0,root,0, root,0,root,0, root+12,0,0,root];
+  if (bassPat[s16]) musicVoice(N(bassPat[s16]), t, STEP_DUR * 1.8, 0.16, 'triangle');
+
+  musicVoice(N(SONG.chordRoots[bar] + SONG.arp[s16 % 4] + 12), t, STEP_DUR * 0.9, 0.035, 'square');
+
+  const note = SONG.lead[step % 64];
+  const octaveUp = ((step >> 6) % 2) ? 12 : 0; // lead jumps an octave every other loop
+  if (note) musicVoice(N(note + octaveUp), t, STEP_DUR * 1.6, 0.07, 'square');
+}
+
+function startMusic() {
+  if (music.playing || !audio) return;
+  music.playing = true;
+  if (!music.gain) {
+    music.gain = audio.createGain();
+    music.gain.connect(audio.destination);
+  }
+  music.gain.gain.setValueAtTime(music.muted ? 0.0001 : 0.55, audio.currentTime);
+  music.step = 0;
+  music.nextTime = audio.currentTime + 0.05;
+  music.timer = setInterval(() => {
+    while (music.nextTime < audio.currentTime + 0.12) {
+      scheduleStep(music.step, music.nextTime);
+      music.step++;
+      music.nextTime += STEP_DUR;
+    }
+  }, 25);
+}
+
+function stopMusic() {
+  if (!music.playing) return;
+  music.playing = false;
+  clearInterval(music.timer);
+  music.gain.gain.setTargetAtTime(0.0001, audio.currentTime, 0.2);
+}
+
+function toggleMusic() {
+  music.muted = !music.muted;
+  if (music.gain) music.gain.gain.setTargetAtTime(music.muted ? 0.0001 : 0.55, audio.currentTime, 0.05);
+}
+
+function gameOverJingle() {
+  if (!audio || !music.gain) return;
+  const t = audio.currentTime + 0.3;
+  [69, 65, 60].forEach((n, i) => musicVoice(N(n - 12), t + i * 0.28, 0.5, 0.12, 'square'));
+}
+
+// ---------- HUD ----------
+const scoreEl = document.getElementById('score');
+const comboEl = document.getElementById('combo');
+const hpEl = document.getElementById('hp');
+const vignetteEl = document.getElementById('vignette');
+const POPS = ['BOXED!', 'SCANNED!', 'DECLINED!', 'ARCHIVED!', 'VERBUCHT!', 'REFUNDED!'];
+
+const chf = n => 'CHF ' + n.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function spawnPop(worldPos, extra) {
+  const p = worldPos.clone().project(camera);
+  const el = document.createElement('div');
+  el.className = extra ? 'pop amount' : 'pop';
+  el.textContent = extra || POPS[(Math.random() * POPS.length) | 0];
+  el.style.left = ((p.x * 0.5 + 0.5) * innerWidth) + 'px';
+  el.style.top = ((-p.y * 0.5 + 0.5) * innerHeight) + 'px';
+  el.style.fontSize = extra ? '18px' : '30px';
+  document.getElementById('hud').appendChild(el);
+  setTimeout(() => el.remove(), 700);
+}
+
+// ---------- Game state ----------
+const state = {
+  running: false,
+  time: 0,
+  score: 0,
+  hp: 3,
+  combo: 0,
+  comboTimer: 0,
+  spawnTimer: 0.1,
+  taxTimer: 20,
+  powerTimer: 12,
+  laserUntil: 0,
+  goldUntil: 0,
+  shake: 0,
+  receipts: [],
+  scraps: [],
+  powerups: [],
+};
+
+window.__state = state; // debug/testing handle
+window.__cam = camera;
+
+function updateHud() {
+  scoreEl.textContent = chf(state.score);
+  hpEl.textContent = '❤️'.repeat(state.hp) + '🖤'.repeat(3 - state.hp);
+  if (state.combo > 1) {
+    comboEl.textContent = 'COMBO ×' + state.combo;
+    comboEl.style.opacity = 1;
+  } else {
+    comboEl.style.opacity = 0;
+  }
+}
+
+// ---------- Receipts ----------
+function spawnReceipt(type) {
+  const spec = TYPES[type];
+  const variant = VARIANTS[type][(Math.random() * VARIANTS[type].length) | 0];
+  const mat = new THREE.MeshBasicMaterial({
+    map: variant.tex,
+    side: THREE.DoubleSide,
+    transparent: true,
+  });
+  const mesh = new THREE.Mesh(variant.geo, mat);
+  const origin = SPAWNS[type][(Math.random() * SPAWNS[type].length) | 0];
+  mesh.position.copy(origin);
+  mesh.position.x += (Math.random() - 0.5) * 0.8;
+
+  // fly out wide first, then curve in and home at the player
+  const scatter = new THREE.Vector3(
+    (Math.random() - 0.5) * 8,
+    0.8 + Math.random() * 3.4,
+    -12 + Math.random() * 5
+  );
+  const aim = new THREE.Vector3(
+    (Math.random() - 0.5) * 2.4, // offset around the player, tracked live while homing
+    0.9 + Math.random() * 1.7,
+    CAM_POS.z + 0.3
+  );
+  const speed = Math.min(13, 5.2 + state.time * 0.1) * (0.85 + Math.random() * 0.3) * spec.speedMul;
+  const velocity = scatter.clone().sub(mesh.position).normalize().multiplyScalar(speed);
+
+  state.receipts.push({
+    mesh, velocity, aim, scatterZ: scatter.z, type,
+    total: variant.total,
+    hp: spec.hp,
+    radius: spec.radius,
+    flutter: spec.flutter,
+    speed,
+    knock: 0,
+    knockVel: new THREE.Vector3(),
+    iframes: 0,
+    phase: Math.random() * Math.PI * 2,
+    flying: false,
+    life: 0,
+    spin: new THREE.Vector3(),
+  });
+  scene.add(mesh);
+  if (type === 'tax') playSound('monster');
+}
+
+function punchReceipt(r, glovePos) {
+  const gold = state.time < state.goldUntil;
+  r.hp -= gold ? 3 : 1;
+  r.iframes = 0.35;
+  playSound('hit');
+  spawnScraps(r.mesh.position);
+
+  if (r.hp > 0) {
+    // knocked back, comes again
+    const back = r.mesh.position.clone().sub(glovePos).normalize();
+    back.z -= 1; back.y += 0.3;
+    r.knock = 0.45;
+    r.knockVel.copy(back.normalize().multiplyScalar(9));
+    state.shake = Math.min(state.shake + 0.2, 0.6);
+    spawnPop(r.mesh.position, r.hp + ' MORE!');
+    return;
+  }
+
+  r.flying = true;
+  const away = r.mesh.position.clone().sub(glovePos).normalize();
+  away.z -= 1.2; away.y += 0.5;
+  away.x += (Math.random() - 0.5);
+  r.velocity.copy(away.normalize().multiplyScalar(20));
+  r.spin.set(Math.random() * 14 - 7, Math.random() * 14 - 7, Math.random() * 14 - 7);
+
+  state.combo++;
+  state.comboTimer = 2.2;
+  const amount = r.total * Math.min(state.combo, 5) * (gold ? 2 : 1);
+  state.score += amount;
+  state.shake = Math.min(state.shake + 0.35, 0.6);
+  spawnPop(r.mesh.position, null);
+  spawnPop(r.mesh.position.clone().add(new THREE.Vector3(0.4, -0.3, 0)), '+' + chf(amount));
+  updateHud();
+}
+
+// paper scrap particles
+const scrapGeo = new THREE.PlaneGeometry(0.09, 0.12);
+const scrapMat = new THREE.MeshBasicMaterial({ color: 0xf3efe2, side: THREE.DoubleSide, transparent: true });
+function spawnScraps(pos) {
+  for (let i = 0; i < 8; i++) {
+    const m = new THREE.Mesh(scrapGeo, scrapMat.clone());
+    m.position.copy(pos);
+    scene.add(m);
+    state.scraps.push({
+      mesh: m,
+      vel: new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 4 + 1, (Math.random() - 0.5) * 6),
+      life: 0.9,
+    });
+  }
+}
+
+// ---------- Power-ups ----------
+const POWER_SPECS = {
+  laser: { icon: '🔴', label: 'LASER',  color: '#e11d1d' },
+  gold:  { icon: '🥊', label: 'GOLD',   color: '#b8860b' },
+  heart: { icon: '❤️', label: 'HERZ',   color: '#e11d1d' },
+};
+
+function makePickupTexture(type) {
+  const s = POWER_SPECS[type];
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.beginPath();
+  g.roundRect(4, 4, 120, 120, 22);
+  g.fill();
+  g.strokeStyle = s.color;
+  g.lineWidth = 6;
+  g.stroke();
+  g.textAlign = 'center';
+  g.font = '54px sans-serif';
+  g.fillText(s.icon, 64, 72);
+  g.fillStyle = s.color;
+  g.font = 'bold 20px monospace';
+  g.fillText(s.label, 64, 108);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const pickupTextures = { laser: makePickupTexture('laser'), gold: makePickupTexture('gold'), heart: makePickupTexture('heart') };
+const pickupGeo = new THREE.PlaneGeometry(0.6, 0.6);
+
+function spawnPowerup() {
+  const type = ['laser', 'laser', 'gold', 'gold', 'heart'][(Math.random() * 5) | 0];
+  const mesh = new THREE.Mesh(pickupGeo, new THREE.MeshBasicMaterial({
+    map: pickupTextures[type], side: THREE.DoubleSide, transparent: true,
+  }));
+  mesh.position.set((Math.random() - 0.5) * 8, 1.5 + Math.random() * 1.5, -20);
+  state.powerups.push({ mesh, type, phase: Math.random() * 7 });
+  scene.add(mesh);
+}
+
+function collectPowerup(p) {
+  if (p.type === 'laser') state.laserUntil = state.time + 8;
+  if (p.type === 'gold') state.goldUntil = state.time + 10;
+  if (p.type === 'heart') state.hp = Math.min(3, state.hp + 1);
+  playSound('power');
+  spawnPop(p.mesh.position, POWER_SPECS[p.type].label + '!');
+  scene.remove(p.mesh);
+  p.mesh.material.dispose();
+  state.powerups.splice(state.powerups.indexOf(p), 1);
+  updateHud();
+}
+
+// laser beam
+const beam = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.035, 0.035, 1, 8),
+  new THREE.MeshBasicMaterial({ color: 0xff2222, transparent: true, opacity: 0.85 })
+);
+beam.visible = false;
+scene.add(beam);
+const beamLine = new THREE.Line3();
+const beamClosest = new THREE.Vector3();
+
+function updateLaser() {
+  const active = state.running && state.time < state.laserUntil;
+  beam.visible = active;
+  laserGun.visible = active;
+  gloves[1].mesh.visible = !active; // the scanner replaces the right hand
+  if (!active) return;
+  const dir = new THREE.Vector3(mouse.x, mouse.y, 0.5).unproject(camera).sub(camera.position).normalize();
+  const aimPoint = camera.position.clone().addScaledVector(dir, 32);
+  laserGun.lookAt(aimPoint);
+  const origin = new THREE.Vector3();
+  laserGun.userData.tip.getWorldPosition(origin);
+  const end = origin.clone().add(aimPoint.sub(origin).normalize().multiplyScalar(32));
+  dir.copy(end).sub(origin).normalize();
+  beam.position.lerpVectors(origin, end, 0.5);
+  beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  beam.scale.set(1, origin.distanceTo(end), 1);
+  beamLine.set(origin, end);
+  for (const r of state.receipts) {
+    if (r.flying || r.iframes > 0) continue;
+    beamLine.closestPointToPoint(r.mesh.position, true, beamClosest);
+    if (beamClosest.distanceTo(r.mesh.position) < 0.6) punchReceipt(r, beamClosest);
+  }
+}
+
+// ---------- Input ----------
+const mouse = { x: 0, y: 0 };
+addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+});
+addEventListener('contextmenu', e => e.preventDefault());
+
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyM') toggleMusic();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+let playerX = 0;
+
+function punch(sideIndex) {
+  if (sideIndex === 1 && state.time < state.laserUntil) return; // right hand is holding the scanner
+  const g = gloves[sideIndex];
+  if (g.active) return;
+  g.active = true;
+  g.t = 0;
+  g.target.set(mouse.x * 1.8, mouse.y * 1.1 - 0.15, -2.6);
+  playSound('punch');
+  state.shake = Math.min(state.shake + 0.12, 0.6);
+}
+
+addEventListener('mousedown', e => {
+  if (!state.running) return;
+  punch(e.button === 2 ? 1 : 0);
+});
+
+// ---------- Screens ----------
+const startScreen = document.getElementById('startScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+
+startScreen.addEventListener('click', () => {
+  initAudio();
+  startMusic();
+  startScreen.classList.add('hidden');
+  state.running = true;
+  updateHud();
+});
+
+let gameOverAt = 0;
+gameOverScreen.addEventListener('click', () => {
+  if (performance.now() - gameOverAt < 1500) return; // ignore leftover punch clicks
+  location.reload();
+});
+
+function gameOver() {
+  state.running = false;
+  stopMusic();
+  gameOverJingle();
+  gameOverAt = performance.now();
+  const cta = gameOverScreen.querySelector('.cta');
+  cta.classList.add('disabled');
+  setTimeout(() => cta.classList.remove('disabled'), 1500);
+  const best = Math.max(state.score, +localStorage.getItem('bonboxingBest') || 0);
+  localStorage.setItem('bonboxingBest', best);
+  document.getElementById('finalScore').textContent = chf(state.score) + ' declined';
+  document.getElementById('bestScore').textContent = 'Personal best: ' + chf(best);
+  gameOverScreen.classList.remove('hidden');
+}
+
+// ---------- Main loop ----------
+const clock = new THREE.Clock();
+const gloveWorldPos = new THREE.Vector3();
+const homeTarget = new THREE.Vector3();
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // sidestep with A/D or arrow keys
+  const move = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  playerX = Math.max(-3.5, Math.min(3.5, playerX + move * 5 * dt));
+
+  // camera aim + shake
+  camera.rotation.set(mouse.y * 0.3, -mouse.x * 0.55, 0);
+  const shakeAmp = state.shake > 0 ? state.shake * 0.12 : 0;
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3);
+  camera.position.set(
+    playerX + (Math.random() - 0.5) * shakeAmp,
+    CAM_POS.y + (Math.random() - 0.5) * shakeAmp,
+    CAM_POS.z
+  );
+
+  updateSmoke(dt);
+
+  // gloves
+  for (const g of gloves) {
+    if (g.active) {
+      g.t += dt / 0.32;
+      if (g.t >= 1) { g.t = 1; g.active = false; }
+      const ext = g.t < 0.35 ? g.t / 0.35 : 1 - (g.t - 0.35) / 0.65;
+      const eased = 1 - Math.pow(1 - ext, 2);
+      g.mesh.position.lerpVectors(g.rest, g.target, eased);
+      g.mesh.rotation.z = g.side * eased * -0.5;
+
+      // hit detection while extended
+      if (eased > 0.4 && g.t < 0.55) {
+        g.mesh.getWorldPosition(gloveWorldPos);
+        const goldBonus = state.time < state.goldUntil ? 0.6 : 0;
+        for (const r of state.receipts) {
+          if (!r.flying && r.iframes <= 0 && r.mesh.position.distanceTo(gloveWorldPos) < r.radius + goldBonus) {
+            punchReceipt(r, gloveWorldPos);
+          }
+        }
+        for (const p of [...state.powerups]) {
+          if (p.mesh.position.distanceTo(gloveWorldPos) < 1.5 + goldBonus) collectPowerup(p);
+        }
+      }
+    } else {
+      // idle bob
+      g.mesh.position.lerp(g.rest, dt * 8);
+      g.mesh.position.y = g.rest.y + Math.sin(clock.elapsedTime * 3 + g.side) * 0.02;
+      g.mesh.rotation.z *= 1 - dt * 8;
+    }
+  }
+
+  if (state.running) {
+    state.time += dt;
+
+    // combo decay
+    if (state.comboTimer > 0) {
+      state.comboTimer -= dt;
+      if (state.comboTimer <= 0) { state.combo = 0; updateHud(); }
+    }
+
+    // spawning, faster over time
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) {
+      spawnReceipt(Math.random() < 0.15 ? 'qr' : 'bon');
+      state.spawnTimer = Math.max(0.45, 1.5 - state.time * 0.02) * (0.7 + Math.random() * 0.6);
+    }
+
+    // the taxman cometh
+    state.taxTimer -= dt;
+    if (state.taxTimer <= 0) {
+      spawnReceipt('tax');
+      state.taxTimer = 18 + Math.random() * 12;
+    }
+
+    // power-up drops
+    state.powerTimer -= dt;
+    if (state.powerTimer <= 0) {
+      spawnPowerup();
+      state.powerTimer = 14 + Math.random() * 10;
+    }
+  }
+
+  // receipts
+  for (let i = state.receipts.length - 1; i >= 0; i--) {
+    const r = state.receipts[i];
+    if (r.iframes > 0) r.iframes -= dt;
+
+    if (!r.flying && r.knock > 0) {
+      // staggering backwards after a punch
+      r.knock -= dt;
+      r.mesh.position.addScaledVector(r.knockVel, dt);
+      if (r.knock <= 0) {
+        // resume the attack
+        homeTarget.set(playerX + r.aim.x, r.aim.y, r.aim.z);
+        r.velocity.copy(homeTarget.sub(r.mesh.position).normalize().multiplyScalar(r.speed));
+      }
+    } else {
+      if (!r.flying && r.mesh.position.z > r.scatterZ) {
+        // past the scatter point: curve in and home at the player
+        homeTarget.set(playerX + r.aim.x, r.aim.y, r.aim.z);
+        const desired = homeTarget.sub(r.mesh.position).normalize().multiplyScalar(r.speed);
+        r.velocity.lerp(desired, Math.min(1, dt * 3));
+      }
+      r.mesh.position.addScaledVector(r.velocity, dt);
+    }
+
+    if (r.flying) {
+      r.life += dt;
+      r.velocity.y -= 9 * dt;
+      r.mesh.rotation.x += r.spin.x * dt;
+      r.mesh.rotation.y += r.spin.y * dt;
+      r.mesh.rotation.z += r.spin.z * dt;
+      r.mesh.material.opacity = Math.max(0, 1 - r.life / 1.2);
+      if (r.life > 1.2) {
+        scene.remove(r.mesh);
+        r.mesh.material.dispose();
+        state.receipts.splice(i, 1);
+      }
+    } else {
+      // flutter toward the player
+      r.phase += dt * 5 * Math.max(r.flutter, 0.6);
+      r.mesh.rotation.z = Math.sin(r.phase) * 0.45 * r.flutter;
+      r.mesh.rotation.y = Math.sin(r.phase * 0.6) * 0.5 * r.flutter;
+      r.mesh.position.x += Math.sin(r.phase * 0.8) * dt * 0.6 * r.flutter;
+
+      if (r.mesh.position.z > CAM_POS.z - 0.4) {
+        const dodged = Math.abs(r.mesh.position.x - playerX) > 1.6;
+        scene.remove(r.mesh);
+        r.mesh.material.dispose();
+        state.receipts.splice(i, 1);
+        if (dodged) {
+          if (state.running) spawnPop(r.mesh.position, 'DODGED!');
+        } else if (state.running) {
+          state.hp--;
+          state.combo = 0;
+          state.shake = 0.6;
+          playSound('hurt');
+          vignetteEl.style.opacity = 1;
+          setTimeout(() => vignetteEl.style.opacity = 0, 220);
+          updateHud();
+          if (state.hp <= 0) gameOver();
+        }
+      }
+    }
+  }
+
+  // power-ups: drift toward the player, bobbing and spinning
+  for (let i = state.powerups.length - 1; i >= 0; i--) {
+    const p = state.powerups[i];
+    p.phase += dt * 2;
+    p.mesh.position.z += dt * 2.2;
+    p.mesh.position.y += Math.sin(p.phase) * dt * 0.4;
+    p.mesh.rotation.y += dt * 2;
+    if (p.mesh.position.z > CAM_POS.z + 0.5) {
+      scene.remove(p.mesh);
+      p.mesh.material.dispose();
+      state.powerups.splice(i, 1);
+    }
+  }
+
+  updateLaser();
+
+  // gold gloves visual + power HUD
+  const goldActive = state.time < state.goldUntil;
+  for (const g of gloves) g.mesh.userData.mat.color.setHex(goldActive ? GLOVE_GOLD : GLOVE_ORANGE);
+  const powerEl = document.getElementById('power');
+  if (state.running && state.time < state.laserUntil) {
+    powerEl.className = 'laser';
+    powerEl.textContent = '🔴 LASER ' + Math.ceil(state.laserUntil - state.time) + 's';
+  } else if (state.running && goldActive) {
+    powerEl.className = 'gold';
+    powerEl.textContent = '🥊 GOLD ' + Math.ceil(state.goldUntil - state.time) + 's';
+  } else {
+    powerEl.className = '';
+  }
+
+  // scraps
+  for (let i = state.scraps.length - 1; i >= 0; i--) {
+    const s = state.scraps[i];
+    s.life -= dt;
+    s.vel.y -= 12 * dt;
+    s.mesh.position.addScaledVector(s.vel, dt);
+    s.mesh.rotation.x += 6 * dt;
+    s.mesh.rotation.y += 9 * dt;
+    s.mesh.material.opacity = s.life;
+    if (s.life <= 0) {
+      scene.remove(s.mesh);
+      s.mesh.material.dispose();
+      state.scraps.splice(i, 1);
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+tick();
+</script>
+</body>
+</html>
